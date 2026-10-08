@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+
+<title>
+  Monitor ESP32 MQTT
+</title>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+
+  margin: 0;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  background:
+    linear-gradient(
+      135deg,
+      #020617,
+      #0f172a
+    );
+
+  color: white;
+
+  min-height: 100vh;
+
+  padding: 30px;
+}
+
+.container {
+
+  max-width: 1000px;
+
+  margin: auto;
+}
+
+header {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 20px;
+
+  margin-bottom: 30px;
+}
+
+h1 {
+
+  margin: 0;
+
+  font-size: 32px;
+}
+
+.subtitle {
+
+  color: #94a3b8;
+
+  margin-top: 5px;
+}
+
+.connection {
+
+  background: #1e293b;
+
+  padding: 12px 18px;
+
+  border-radius: 30px;
+
+  font-weight: bold;
+}
+
+.dot {
+
+  display: inline-block;
+
+  width: 11px;
+
+  height: 11px;
+
+  border-radius: 50%;
+
+  background: #ef4444;
+
+  margin-right: 8px;
+}
+
+.dot.online {
+
+  background: #22c55e;
+
+  box-shadow:
+    0 0 12px #22c55e;
+}
+
+.grid {
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(
+        220px,
+        1fr
+      )
+    );
+
+  gap: 20px;
+}
+
+.card {
+
+  background:
+    rgba(
+      30,
+      41,
+      59,
+      0.95
+    );
+
+  border-radius: 20px;
+
+  padding: 25px;
+
+  box-shadow:
+    0 15px 40px
+    rgba(
+      0,
+      0,
+      0,
+      0.25
+    );
+}
+
+.label {
+
+  color: #94a3b8;
+
+  margin-bottom: 12px;
+}
+
+.value {
+
+  font-size: 38px;
+
+  font-weight: bold;
+}
+
+.unit {
+
+  font-size: 16px;
+
+  color: #94a3b8;
+}
+
+.led {
+
+  width: 80px;
+
+  height: 80px;
+
+  border-radius: 50%;
+
+  background: #334155;
+
+  margin: 15px auto;
+
+  transition: 0.3s;
+}
+
+.led.on {
+
+  background: #facc15;
+
+  box-shadow:
+    0 0 40px
+    rgba(
+      250,
+      204,
+      21,
+      0.9
+    );
+}
+
+.led-status {
+
+  text-align: center;
+
+  font-size: 20px;
+
+  font-weight: bold;
+
+  margin-bottom: 15px;
+}
+
+button {
+
+  width: 100%;
+
+  border: none;
+
+  border-radius: 12px;
+
+  padding: 14px;
+
+  margin-top: 8px;
+
+  font-size: 16px;
+
+  font-weight: bold;
+
+  cursor: pointer;
+}
+
+.btn-on {
+
+  background: #facc15;
+
+  color: #111827;
+}
+
+.btn-off {
+
+  background: #475569;
+
+  color: white;
+}
+
+button:hover {
+
+  transform: scale(1.02);
+}
+
+.info {
+
+  margin-top: 20px;
+
+  color: #94a3b8;
+
+  line-height: 1.8;
+}
+
+.log {
+
+  margin-top: 20px;
+
+  background: #020617;
+
+  border-radius: 15px;
+
+  padding: 15px;
+
+  height: 180px;
+
+  overflow-y: auto;
+
+  font-family:
+    Consolas,
+    monospace;
+
+  font-size: 13px;
+
+  color: #cbd5e1;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<header>
+
+<div>
+
+<h1>
+ESP32 Monitor
+</h1>
+
+<div class="subtitle">
+Ultrassônico + MQTT + LED
+</div>
+
+</div>
+
+<div class="connection">
+
+<span
+  id="dot"
+  class="dot"
+></span>
+
+<span id="connection">
+Desconectado
+</span>
+
+</div>
+
+</header>
+
+
+<div class="grid">
+
+
+<!-- DISTÂNCIA -->
+
+<div class="card">
+
+<div class="label">
+Distância
+</div>
+
+<div class="value">
+
+<span id="distance">
+--
+</span>
+
+<span class="unit">
+cm
+</span>
+
+</div>
+
+</div>
+
+
+<!-- RSSI -->
+
+<div class="card">
+
+<div class="label">
+Wi-Fi RSSI
+</div>
+
+<div class="value">
+
+<span id="rssi">
+--
+</span>
+
+<span class="unit">
+dBm
+</span>
+
+</div>
+
+</div>
+
+
+<!-- UPTIME -->
+
+<div class="card">
+
+<div class="label">
+Tempo ligado
+</div>
+
+<div class="value">
+
+<span id="uptime">
+--
+</span>
+
+<span class="unit">
+s
+</span>
+
+</div>
+
+</div>
+
+
+<!-- LED -->
+
+<div class="card">
+
+<div class="label">
+LED interno
+</div>
+
+<div
+  id="led"
+  class="led"
+></div>
+
+<div
+  id="ledStatus"
+  class="led-status"
+>
+DESLIGADO
+</div>
+
+<button
+  class="btn-on"
+  onclick="ligarLED()"
+>
+LIGAR LED
+</button>
+
+<button
+  class="btn-off"
+  onclick="desligarLED()"
+>
+DESLIGAR LED
+</button>
+
+</div>
+
+</div>
+
+
+<div class="card info">
+
+<strong>
+Broker:
+</strong>
+
+vf3c1101.ala.us-east-1.emqxsl.com
+
+<br>
+
+<strong>
+WebSocket:
+</strong>
+
+8084
+
+<br>
+
+<strong>
+Tópico:
+</strong>
+
+espandre
+
+</div>
+
+
+<div
+  id="log"
+  class="log"
+></div>
+
+</div>
+
+
+<script>
+
+// =====================================================
+// CONFIGURAÇÃO MQTT
+// =====================================================
+
+const MQTT_HOST =
+  "vf3c1101.ala.us-east-1.emqxsl.com";
+
+const MQTT_PORT =
+  8084;
+
+const MQTT_TOPIC =
+  "espandre";
+
+const MQTT_USERNAME =
+  "andre";
+
+const MQTT_PASSWORD =
+  "12345678";
+
+
+// =====================================================
+// CLIENT ID
+// =====================================================
+
+const clientId =
+  "painel-andreesp-" +
+  Math.random()
+    .toString(16)
+    .substring(2);
+
+
+// =====================================================
+// ELEMENTOS HTML
+// =====================================================
+
+const distance =
+  document.getElementById(
+    "distance"
+  );
+
+const rssi =
+  document.getElementById(
+    "rssi"
+  );
+
+const uptime =
+  document.getElementById(
+    "uptime"
+  );
+
+const led =
+  document.getElementById(
+    "led"
+  );
+
+const ledStatus =
+  document.getElementById(
+    "ledStatus"
+  );
+
+const connection =
+  document.getElementById(
+    "connection"
+  );
+
+const dot =
+  document.getElementById(
+    "dot"
+  );
+
+const log =
+  document.getElementById(
+    "log"
+  );
+
+
+// =====================================================
+// LOG
+// =====================================================
+
+function adicionarLog(
+  mensagem
+) {
+
+  const hora =
+    new Date()
+      .toLocaleTimeString(
+        "pt-BR"
+      );
+
+  log.textContent +=
+    `[${hora}] ${mensagem}\n`;
+
+  log.scrollTop =
+    log.scrollHeight;
+}
+
+
+// =====================================================
+// CONEXÃO
+// =====================================================
+
+function atualizarConexao(
+  online
+) {
+
+  if (online) {
+
+    connection.textContent =
+      "MQTT conectado";
+
+    dot.classList.add(
+      "online"
+    );
+
+  } else {
+
+    connection.textContent =
+      "Desconectado";
+
+    dot.classList.remove(
+      "online"
+    );
+  }
+}
+
+
+// =====================================================
+// LED
+// =====================================================
+
+function atualizarLED(
+  estado
+) {
+
+  if (estado) {
+
+    led.classList.add(
+      "on"
+    );
+
+    ledStatus.textContent =
+      "LIGADO";
+
+  } else {
+
+    led.classList.remove(
+      "on"
+    );
+
+    ledStatus.textContent =
+      "DESLIGADO";
+  }
+}
+
+
+// =====================================================
+// CONECTAR MQTT
+// =====================================================
+
+const client =
+  mqtt.connect(
+
+    `wss://${MQTT_HOST}:${MQTT_PORT}/mqtt`,
+
+    {
+
+      clientId:
+
+        clientId,
+
+      username:
+
+        MQTT_USERNAME,
+
+      password:
+
+        MQTT_PASSWORD,
+
+      clean:
+
+        true,
+
+      reconnectPeriod:
+
+        3000,
+
+      connectTimeout:
+
+        10000,
+
+      keepalive:
+
+        30
+    }
+  );
+
+
+// =====================================================
+// MQTT CONECTADO
+// =====================================================
+
+client.on(
+  "connect",
+  function() {
+
+    atualizarConexao(
+      true
+    );
+
+    adicionarLog(
+      "Conectado ao EMQX."
+    );
+
+    client.subscribe(
+      MQTT_TOPIC,
+      {
+        qos: 1
+      },
+      function(error) {
+
+        if (error) {
+
+          adicionarLog(
+            "Erro ao assinar tópico."
+          );
+
+        } else {
+
+          adicionarLog(
+            "Tópico assinado: " +
+            MQTT_TOPIC
+          );
+        }
+      }
+    );
+  }
+);
+
+
+// =====================================================
+// RECONEXÃO
+// =====================================================
+
+client.on(
+  "reconnect",
+  function() {
+
+    atualizarConexao(
+      false
+    );
+
+    adicionarLog(
+      "Tentando reconectar..."
+    );
+  }
+);
+
+
+// =====================================================
+// OFFLINE
+// =====================================================
+
+client.on(
+  "offline",
+  function() {
+
+    atualizarConexao(
+      false
+    );
+
+    adicionarLog(
+      "MQTT offline."
+    );
+  }
+);
+
+
+// =====================================================
+// ERRO
+// =====================================================
+
+client.on(
+  "error",
+  function(error) {
+
+    atualizarConexao(
+      false
+    );
+
+    adicionarLog(
+      "Erro MQTT: " +
+      error.message
+    );
+  }
+);
+
+
+// =====================================================
+// RECEBER DADOS
+// =====================================================
+
+client.on(
+  "message",
+  function(
+    topic,
+    payload
+  ) {
+
+    const mensagem =
+      payload.toString();
+
+    adicionarLog(
+      "RX: " +
+      mensagem
+    );
+
+    try {
+
+      const dados =
+        JSON.parse(
+          mensagem
+        );
+
+
+      // DISTÂNCIA
+
+      if (
+        dados.distance_cm !==
+        undefined
+      ) {
+
+        if (
+          dados.distance_cm ===
+          null
+        ) {
+
+          distance.textContent =
+            "--";
+
+        } else {
+
+          distance.textContent =
+            Number(
+              dados.distance_cm
+            ).toFixed(1);
+        }
+      }
+
+
+      // RSSI
+
+      if (
+        dados.rssi !==
+        undefined
+      ) {
+
+        rssi.textContent =
+          dados.rssi;
+      }
+
+
+      // UPTIME
+
+      if (
+        dados.uptime_s !==
+        undefined
+      ) {
+
+        uptime.textContent =
+          dados.uptime_s;
+      }
+
+
+      // LED
+
+      if (
+        dados.led !==
+        undefined
+      ) {
+
+        atualizarLED(
+          dados.led
+        );
+      }
+
+    }
+
+    catch(error) {
+
+      adicionarLog(
+        "Mensagem não é JSON."
+      );
+    }
+  }
+);
+
+
+// =====================================================
+// LIGAR LED
+// =====================================================
+
+function ligarLED() {
+
+  if (
+    !client.connected
+  ) {
+
+    adicionarLog(
+      "MQTT não conectado."
+    );
+
+    return;
+  }
+
+  const comando =
+    JSON.stringify({
+      led: true
+    });
+
+  client.publish(
+    MQTT_TOPIC,
+    comando,
+    {
+      qos: 1
+    }
+  );
+
+  adicionarLog(
+    "TX: " +
+    comando
+  );
+}
+
+
+// =====================================================
+// DESLIGAR LED
+// =====================================================
+
+function desligarLED() {
+
+  if (
+    !client.connected
+  ) {
+
+    adicionarLog(
+      "MQTT não conectado."
+    );
+
+    return;
+  }
+
+  const comando =
+    JSON.stringify({
+      led: false
+    });
+
+  client.publish(
+    MQTT_TOPIC,
+    comando,
+    {
+      qos: 1
+    }
+  );
+
+  adicionarLog(
+    "TX: " +
+    comando
+  );
+}
+
+</script>
+
+</body>
+
+</html>
